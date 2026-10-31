@@ -1,16 +1,10 @@
-const CACHE_NAME = 'watchlist-hub-v1';
+const CACHE_NAME = 'watchlist-hub-v2';
+const DYNAMIC_CACHE = 'watchlist-hub-dynamic';
+
 const STATIC_ASSETS = [
-    '/',
-    '/index.html',
     '/manifest.json',
     '/favicon.svg'
 ];
-
-// Import Tailwind CSS (pakai CDN)
-const TAILWIND_CSS = 'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4';
-
-// Font awesome fallback (tidak pakai)
-// const FA_CSS = '...';
 
 let offlinePage = `
 <!DOCTYPE html>
@@ -46,21 +40,62 @@ let offlinePage = `
 `;
 
 self.addEventListener('install', e => {
-    e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)));
+    e.waitUntil(
+        caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+    );
+    e.waitUntil(caches.delete(CACHE_NAME));
 });
 
 self.addEventListener('fetch', e => {
     const req = e.request;
     if (req.method !== 'GET' || req.url.includes('/.netlify')) return;
 
-    e.respondWith(
-        caches.match(req).then(cached => {
-            if (cached) return cached;
-            return fetch(req).catch(() => new Response(offlinePage, { headers: { 'Content-Type': 'text/html' } }));
-        })
-    );
+    if (req.headers.get('Accept').includes('text/html')) {
+        // Network-first for HTML - always get latest from server
+        e.respondWith(
+            fetch(req).then(resp => {
+                if (resp && resp.status === 200) {
+                    const cloned = resp.clone();
+                    caches.open(DYNAMIC_CACHE).then(cache => {
+                        cache.put(req, cloned);
+                    });
+                }
+                return resp;
+            }).catch(() => {
+                return caches.match('/').then(cached => cached || new Response(offlinePage, {
+                    headers: { 'Content-Type': 'text/html' }
+                }));
+            })
+        );
+    } else {
+        // Cache-first for non-HTML (CSS, JS, images, etc.)
+        e.respondWith(
+            caches.match(req).then(cached => {
+                if (cached) return cached;
+                return fetch(req).then(resp => {
+                    if (resp && resp.status === 200) {
+                        const cloned = resp.clone();
+                        caches.open(DYNAMIC_CACHE).then(cache => {
+                            cache.put(req, cloned);
+                        });
+                    }
+                    return resp;
+                });
+            })
+        );
+    }
 });
 
 self.addEventListener('activate', e => {
-    e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))));
+    e.waitUntil(
+        caches.keys().then(keys => {
+            return Promise.all(
+                keys.map(key => {
+                    if (key !== CACHE_NAME && key.startsWith('watchlist-hub-')) {
+                        return caches.delete(key);
+                    }
+                })
+            );
+        })
+    );
 });
