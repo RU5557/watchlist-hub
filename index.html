@@ -284,39 +284,40 @@
 
             showLoading(true);
             try {
-                const [playback, showsW, showsP, moviesP, animeW, animeP] = await Promise.allSettled([
+                const [playback, showsRes, moviesRes, animeRes] = await Promise.allSettled([
                     fetchSimkl('/sync/playback'),
-                    fetchSimkl('/sync/all-items/shows/watching?extended=full'),
-                    fetchSimkl('/sync/all-items/shows/plantowatch?extended=full'),
-                    fetchSimkl('/sync/all-items/movies/plantowatch?extended=full'),
-                    fetchSimkl('/sync/all-items/anime/watching?extended=full'),
-                    fetchSimkl('/sync/all-items/anime/plantowatch?extended=full')
+                    fetchSimkl('/sync/all-items/shows?extended=full'),
+                    fetchSimkl('/sync/all-items/movies?extended=full'),
+                    fetchSimkl('/sync/all-items/anime?extended=full')
                 ]);
 
                 let cwItems = [];
                 let wlItems = [];
                 let ptwItems = [];
 
-                if (playback.status === 'fulfilled') {
+                // 1. Continue Watching dari playback
+                if (playback.status === 'fulfilled' && playback.value) {
                     cwItems = [...(playback.value.shows || []), ...(playback.value.movies || [])].slice(0, 20);
                 }
 
-                if (showsW.status === 'fulfilled') {
-                    wlItems = showsW.value.shows || [];
-                }
-                if (animeW.status === 'fulfilled') {
-                    wlItems = [...wlItems, ...(animeW.value.shows || [])];
-                }
+                // Helper untuk proses item dari /sync/all-items/{type}
+                const processList = (res) => {
+                    if (res.status !== 'fulfilled' || !res.value) return;
+                    // SIMKL mengembalikan array di key 'shows', 'movies', atau 'anime'
+                    const list = res.value.shows || res.value.movies || res.value.anime || [];
+                    list.forEach(item => {
+                        const status = item.status;
+                        if (status === 'watching') {
+                            wlItems.push(item);
+                        } else if (status === 'plantowatch') {
+                            ptwItems.push(item);
+                        }
+                    });
+                };
 
-                if (showsP.status === 'fulfilled') {
-                    ptwItems = showsP.value.shows || [];
-                }
-                if (moviesP.status === 'fulfilled') {
-                    ptwItems = [...ptwItems, ...(moviesP.value.movies || [])];
-                }
-                if (animeP.status === 'fulfilled') {
-                    ptwItems = [...ptwItems, ...(animeP.value.shows || [])];
-                }
+                processList(showsRes);
+                processList(moviesRes);
+                processList(animeRes);
 
                 renderGrid(document.getElementById('continueWatchingGrid'), cwItems);
                 renderGrid(document.getElementById('watchlistGrid'), wlItems);
