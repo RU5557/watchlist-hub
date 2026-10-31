@@ -264,7 +264,10 @@
             if (!state.accessToken) throw new Error('Tidak ada access token');
 
             const res = await fetch(`${SIMKL_BASE}${endpoint}?client_id=${state.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`, {
-                headers: { Authorization: `Bearer ${state.accessToken}` }
+                headers: {
+                    Authorization: `Bearer ${state.accessToken}`,
+                    'User-Agent': `${APP_NAME}/${APP_VERSION}`
+                }
             });
 
             if (res.status === 401) {
@@ -433,16 +436,20 @@
         async function enrichItems(items) {
             for (const item of items) {
                 const show = item.show || item.movie || item;
-                if (!show || !show.ids) continue;
+                if (!show || !show.ids || !show.ids.simkl) continue;
                 if (show.poster && show.overview) continue;
 
                 const simklId = show.ids.simkl;
                 const type = show.type || item.type || 'show';
+                // Map type to correct endpoint path
+                const endpointType = type === 'show' ? 'tv' : (type === 'movie' ? 'movies' : (type === 'anime' ? 'anime' : 'tv'));
+                
                 try {
-                    const detail = await fetchSimkl(`/${type}/${simklId}?extended=full`);
+                    const detail = await fetchSimkl(`/${endpointType}/${simklId}`);
                     if (!show.poster && detail.poster) show.poster = detail.poster;
                     if (!show.overview && detail.overview) show.overview = detail.overview;
                     if (!show.title && detail.title) show.title = detail.title;
+                    if (!show.year && detail.year) show.year = detail.year;
                 } catch (e) {
                     // Catalog fetch failed silently — item stays as-is
                 }
@@ -458,9 +465,14 @@
                 const type = show?.type || item.type || 'show';
                 const progress = item.progress || 0;
 
+                // SIMKL poster: jika berupa path (misal 57/5742576cd8f59fcb0) gabung dengan base URL
+                const fullPoster = poster && !poster.startsWith('http') 
+                    ? `https://simkl.in/posters/${poster}_m.jpg` 
+                    : (poster || '');
+
                 return `<article class="group relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 transition cursor-pointer" data-title="${escapeHtml(title)}" data-overview="${escapeHtml(overview)}" data-type="${type}">
                     <div class="aspect-[2/3] relative overflow-hidden bg-slate-800">
-                        ${poster ? `<img src="${poster}" alt="${escapeHtml(title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy">` : '<div class="w-full h-full flex items-center justify-center text-slate-600">No Image</div>'}
+                        ${fullPoster ? `<img src="${fullPoster}" alt="${escapeHtml(title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy">` : '<div class="w-full h-full flex items-center justify-center text-slate-600">No Image</div>'}
                         ${progress ? `<div class="absolute bottom-0 left-0 right-0 h-1 bg-slate-700"><div class="h-full bg-indigo-500" style="width:${Math.min(progress, 100)}%"></div></div>` : ''}
                         <div class="absolute top-2 right-2">
                             <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-black/80 text-white">${formatType(type)}</span>
