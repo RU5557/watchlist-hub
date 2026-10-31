@@ -32,11 +32,6 @@
             <div id="continueWatchingGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
         </section>
 
-        <section id="watchlistSection" class="hidden mb-8">
-            <h2 class="text-lg font-semibold mb-3 text-slate-300">My Watchlist</h2>
-            <div id="watchlistGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
-        </section>
-
         <section id="planToWatchSection" class="hidden">
             <h2 class="text-lg font-semibold mb-3 text-slate-300">Plan to Watch</h2>
             <div id="planToWatchGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
@@ -292,7 +287,6 @@
                 ]);
 
                 let cwItems = [];
-                let wlItems = [];
                 let ptwItems = [];
 
                 // 1. Continue Watching dari playback
@@ -308,7 +302,7 @@
                     list.forEach(item => {
                         const status = item.status;
                         if (status === 'watching') {
-                            wlItems.push(item);
+                            cwItems.push(item);
                         } else if (status === 'plantowatch') {
                             ptwItems.push(item);
                         }
@@ -319,12 +313,13 @@
                 processList(moviesRes);
                 processList(animeRes);
 
+                // Limit CW to 20
+                cwItems = cwItems.slice(0, 20);
+
                 renderGrid(document.getElementById('continueWatchingGrid'), cwItems);
-                renderGrid(document.getElementById('watchlistGrid'), wlItems);
                 renderGrid(document.getElementById('planToWatchGrid'), ptwItems);
 
                 document.getElementById('continueWatchingSection').classList.toggle('hidden', cwItems.length === 0);
-                document.getElementById('watchlistSection').classList.toggle('hidden', wlItems.length === 0);
                 document.getElementById('planToWatchSection').classList.toggle('hidden', ptwItems.length === 0);
                 document.getElementById('emptyState')?.classList.add('hidden');
             } catch (e) {
