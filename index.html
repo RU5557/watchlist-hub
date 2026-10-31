@@ -377,21 +377,20 @@
             setLoading(true);
 
             try {
-                const [activities, watchlist] = await Promise.allSettled([
-                    fetchSimkl('/sync/activities'),
-                    fetchSimkl('/sync/all-items?extended=full')
+                const [playback, watchlist] = await Promise.allSettled([
+                    fetchSimkl('/sync/playback'),
+                    fetchSimkl('/sync/all-items/shows/watching?extended=full')
                 ]);
 
                 let cwItems = [];
                 let wlItems = [];
 
-                if (activities.status === 'fulfilled' && activities.value.tv_shows?.playback) {
-                    const pb = activities.value.tv_shows.playback || {};
-                    if (pb) cwItems = Object.values(pb).slice(0, 20);
+                if (playback.status === 'fulfilled' && playback.value) {
+                    cwItems = (playback.value.shows || []).concat(playback.value.movies || []).slice(0, 20);
                 }
 
                 if (watchlist.status === 'fulfilled') {
-                    wlItems = watchlist.value.shows?.slice(0, 20) || [];
+                    wlItems = watchlist.value.shows || [];
                 }
 
                 renderGrid($('#continueWatchingGrid'), cwItems);
@@ -412,14 +411,17 @@
 
         function renderGrid(grid, items) {
             grid.innerHTML = (items || []).map(item => {
-                const title = item.show?.title || item.title || 'Unknown';
-                const overview = item.show?.overview || item.overview || '';
-                const poster = getPosterUrl(item.show || item);
-                const type = item.show?.type || item.type || 'movie';
+                const show = item.show || item.movie || item;
+                const title = show?.title || 'Unknown';
+                const overview = show?.overview || '';
+                const poster = show?.poster || (show?.ids?.tmdb ? `https://image.tmdb.org/t/p/w342/p${show.ids.tmdb}` : '');
+                const type = show?.type || item.type || 'show';
+                const progress = item.progress || 0;
 
                 return `<article class="group relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 transition cursor-pointer" data-title="${escapeHtml(title)}" data-overview="${escapeHtml(overview)}" data-type="${type}">
-                    <div class="aspect-[2/3] relative overflow-hidden">
-                        <img src="${poster || 'https://via.placeholder.com/300x450/1e293b/64748b?text=No+Image'}" alt="${escapeHtml(title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy">
+                    <div class="aspect-[2/3] relative overflow-hidden bg-slate-800">
+                        ${poster ? `<img src="${poster}" alt="${escapeHtml(title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy">` : '<div class="w-full h-full flex items-center justify-center text-slate-600">No Image</div>'}
+                        ${progress ? `<div class="absolute bottom-0 left-0 right-0 h-1 bg-slate-700"><div class="h-full bg-indigo-500" style="width:${Math.min(progress, 100)}%"></div></div>` : ''}
                         <div class="absolute top-2 right-2">
                             <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-black/80 text-white">${formatType(type)}</span>
                         </div>
