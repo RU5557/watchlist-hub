@@ -328,62 +328,52 @@
 
             showLoading(true);
             try {
-                const [playback, showsRes, moviesRes, animeRes] = await Promise.allSettled([
+                // Fetch playback + all-items dalam 1 request
+                const [playback, allItems] = await Promise.allSettled([
                     fetchSimkl('/sync/playback'),
-                    fetchSimkl('/sync/all-items/shows?extended=full'),
-                    fetchSimkl('/sync/all-items/movies?extended=full'),
-                    fetchSimkl('/sync/all-items/anime?extended=full')
+                    fetchSimkl('/sync/all-items?extended=full')
                 ]);
 
                 let cwItems = [];
+                let wlItems = [];
                 let ptwItems = [];
 
-                // 1. Continue Watching dari playback
                 if (playback.status === 'fulfilled' && playback.value) {
-                    cwItems = [...(playback.value.shows || []), ...(playback.value.movies || [])].slice(0, 20);
+                    cwItems = [...(playback.value.shows || []), ...(playback.value.movies || [])].slice(0, 9);
                 }
 
-                // Helper untuk proses item dari /sync/all-items/{type}
-                const processList = (res) => {
-                    if (res.status !== 'fulfilled' || !res.value) return;
-                    // SIMKL mengembalikan array di key 'shows', 'movies', atau 'anime'
-                    const list = res.value.shows || res.value.movies || res.value.anime || [];
-                    list.forEach(item => {
-                        const status = item.status;
-                        if (status === 'watching') {
-                            cwItems.push(item);
-                        } else if (status === 'plantowatch') {
-                            ptwItems.push(item);
-                        }
-                    });
-                };
+                if (allItems.status === 'fulfilled' && allItems.value) {
+                    const data = allItems.value;
+                    (data.shows || []).forEach(item => processItem(item, wlItems, ptwItems, cwItems));
+                    (data.movies || []).forEach(item => processItem(item, wlItems, ptwItems, cwItems));
+                    (data.anime || []).forEach(item => processItem(item, wlItems, ptwItems, cwItems));
+                }
 
-                processList(showsRes);
-                processList(moviesRes);
-                processList(animeRes);
-
-                // Helper to get title from item
-                const getTitle = (item) => (item.show || item.movie || item)?.title || '';
-
-                // Sort alphabetically
+                // Sort A-Z
+                const getTitle = i => (i.show || i.movie || i.anime || i)?.title || '';
                 cwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b)));
+                wlItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b)));
                 ptwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b)));
 
-                // Limit each section to max 9
-                cwItems = cwItems.slice(0, 9);
-                ptwItems = ptwItems.slice(0, 9);
+                renderGrid($('#continueWatchingGrid'), cwItems);
+                renderGrid($('#watchlistGrid'), wlItems);
+                renderGrid($('#planToWatchGrid'), ptwItems);
 
-                renderGrid(document.getElementById('continueWatchingGrid'), cwItems);
-                renderGrid(document.getElementById('planToWatchGrid'), ptwItems);
-
-                document.getElementById('continueWatchingSection').classList.toggle('hidden', cwItems.length === 0);
-                document.getElementById('planToWatchSection').classList.toggle('hidden', ptwItems.length === 0);
-                document.getElementById('emptyState')?.classList.add('hidden');
+                $('#continueWatchingSection').classList.toggle('hidden', cwItems.length === 0);
+                $('#watchlistSection').classList.toggle('hidden', wlItems.length === 0);
+                $('#planToWatchSection').classList.toggle('hidden', ptwItems.length === 0);
+                $('#emptyState')?.classList.add('hidden');
             } catch (e) {
                 showBanner(`Error: ${e.message}`);
             } finally {
                 showLoading(false);
             }
+        }
+
+        function processItem(item, wl, ptw, cw) {
+            const status = item.status;
+            if (status === 'watching') wl.push(item);
+            else if (status === 'plantowatch') ptw.push(item);
         }
 
         function renderGrid(grid, items) {
