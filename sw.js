@@ -1,9 +1,9 @@
-const CACHE_NAME = 'watchlist-hub-v2';
+const CACHE_NAME = 'watchlist-hub-v3';
 const DYNAMIC_CACHE = 'watchlist-hub-dynamic';
 
 const STATIC_ASSETS = [
-    '/manifest.json',
-    '/favicon.svg'
+    './manifest.json',
+    './favicon.svg'
 ];
 
 let offlinePage = `
@@ -43,7 +43,7 @@ self.addEventListener('install', e => {
     e.waitUntil(
         caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
     );
-    e.waitUntil(caches.delete(CACHE_NAME));
+    self.skipWaiting();
 });
 
 self.addEventListener('fetch', e => {
