@@ -53,6 +53,14 @@
             </div>
             <div id="watchlistGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
         </section>
+
+        <section id="planToWatchSection" class="hidden mb-8">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-semibold text-slate-300">Plan to Watch</h2>
+                <span id="ptwCount" class="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">0</span>
+            </div>
+            <div id="planToWatchGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"></div>
+        </section>
     </div>
 
     <!-- Auth Modal -->
@@ -377,35 +385,67 @@
             setLoading(true);
 
             try {
-                const [playback, watchlist] = await Promise.allSettled([
+                const [playback, watching, plantowatch] = await Promise.allSettled([
                     fetchSimkl('/sync/playback'),
-                    fetchSimkl('/sync/all-items/shows/watching?extended=full')
+                    fetchSimkl('/sync/all-items/shows/watching?extended=full'),
+                    fetchSimkl('/sync/all-items/shows/plantowatch?extended=full')
                 ]);
 
                 let cwItems = [];
                 let wlItems = [];
+                let ptwItems = [];
 
                 if (playback.status === 'fulfilled' && playback.value) {
                     cwItems = (playback.value.shows || []).concat(playback.value.movies || []).slice(0, 20);
                 }
 
-                if (watchlist.status === 'fulfilled') {
-                    wlItems = watchlist.value.shows || [];
+                if (watching.status === 'fulfilled') {
+                    wlItems = watching.value.shows || [];
                 }
+
+                if (plantowatch.status === 'fulfilled') {
+                    ptwItems = plantowatch.value.shows || [];
+                }
+
+                await enrichItems(cwItems);
+                await enrichItems(wlItems);
+                await enrichItems(ptwItems);
 
                 renderGrid($('#continueWatchingGrid'), cwItems);
                 renderGrid($('#watchlistGrid'), wlItems);
+                renderGrid($('#planToWatchGrid'), ptwItems);
                 $('#cwCount').textContent = cwItems.length;
                 $('#wlCount').textContent = wlItems.length;
+                $('#ptwCount').textContent = ptwItems.length;
 
                 $('#continueWatchingSection').classList.toggle('hidden', cwItems.length === 0);
                 $('#watchlistSection').classList.toggle('hidden', wlItems.length === 0);
-                $('#emptyState').classList.toggle('hidden', cwItems.length > 0 || wlItems.length > 0);
+                $('#planToWatchSection').classList.toggle('hidden', ptwItems.length === 0);
+                $('#emptyState').classList.toggle('hidden', cwItems.length > 0 || wlItems.length > 0 || ptwItems.length > 0);
             } catch (e) {
                 showBanner(`Error: ${e.message}`);
                 setEmpty(true);
             } finally {
                 setLoading(false);
+            }
+        }
+
+        async function enrichItems(items) {
+            for (const item of items) {
+                const show = item.show || item.movie || item;
+                if (!show || !show.ids) continue;
+                if (show.poster && show.overview) continue;
+
+                const simklId = show.ids.simkl;
+                const type = show.type || item.type || 'show';
+                try {
+                    const detail = await fetchSimkl(`/${type}/${simklId}?extended=full`);
+                    if (!show.poster && detail.poster) show.poster = detail.poster;
+                    if (!show.overview && detail.overview) show.overview = detail.overview;
+                    if (!show.title && detail.title) show.title = detail.title;
+                } catch (e) {
+                    // Catalog fetch failed silently — item stays as-is
+                }
             }
         }
 
