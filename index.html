@@ -189,15 +189,16 @@
                 showAuthStatus('Client ID diperlukan', 'error');
                 return;
             }
+            // Simpan clientId ke localStorage SEBELUM apapun
             state.clientId = clientId;
             localStorage.setItem('simkl_client_id', clientId);
             localStorage.setItem('simkl_auth', JSON.stringify(state));
 
             const { verifier, challenge } = await generatePKCE();
             const codeState = crypto.randomUUID();
-            
-            sessionStorage.setItem('pkce_verifier', verifier);
-            sessionStorage.setItem('pkce_state', codeState);
+
+            // Simpan PKCE di localStorage (bukan sessionStorage) agar tetap ada setelah redirect
+            localStorage.setItem('simkl_pkce', JSON.stringify({ verifier, state: codeState }));
 
             const params = new URLSearchParams({
                 response_type: 'code',
@@ -210,6 +211,7 @@
                 'app-version': APP_VERSION
             });
 
+            $('#authModal').classList.add('hidden');
             window.location.href = `${SIMKL_AUTH}/authorize?${params}`;
         }
 
@@ -217,16 +219,23 @@
             const params = new URLSearchParams(window.location.search);
             const code = params.get('code');
             const codeState = params.get('state');
-            const savedState = sessionStorage.getItem('pkce_state');
-            const verifier = sessionStorage.getItem('pkce_verifier');
 
-            if (!code || codeState !== savedState) {
-                showBanner('Login dibatalkan atau tidak valid', 'error');
+            let pkce = null;
+            try {
+                pkce = JSON.parse(localStorage.getItem('simkl_pkce') || 'null');
+            } catch {}
+
+            // Bersihkan URL dulu agar refresh tidak memanggil callback lagi dengan code yang sama
+            window.history.replaceState({}, '', REDIRECT_URI);
+
+            if (!code || !pkce || pkce.state !== codeState) {
+                showBanner('Login dibatalkan atau tidak valid. Coba login ulang.', 'error');
+                localStorage.removeItem('simkl_pkce');
                 return;
             }
 
-            $('#authModal').classList.remove('hidden');
-            showAuthStatus('Menukar kode untuk token...');
+            const verifier = pkce.verifier;
+            const clientId = pkce.clientId || state.clientId || localStorage.getItem('simkl_client_id') || '';
 
             try {
                 const res = await fetch(`${SIMKL_BASE}/oauth2/token`, {
@@ -234,7 +243,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         code,
-                        client_id: state.clientId,
+                        client_id: clientId,
                         code_verifier: verifier,
                         redirect_uri: REDIRECT_URI,
                         grant_type: 'authorization_code'
@@ -247,19 +256,22 @@
                 }
 
                 const data = await res.json();
+                state.clientId = clientId;
                 state.accessToken = data.access_token;
                 state.refreshToken = data.refresh_token;
                 state.tokenExpiry = Date.now() + (data.expires_in * 1000);
-                // Pastikan clientId tersimpan
-                state.clientId = state.clientId || localStorage.getItem('simkl_client_id') || '';
 
                 localStorage.setItem('simkl_auth', JSON.stringify(state));
-                sessionStorage.removeItem('pkce_verifier');
-                sessionStorage.removeItem('pkce_state');
-
-                window.location.replace(REDIRECT_URI);
+                localStorage.setItem('simkl_client_id', clientId);
+                localStorage.removeItem('simkl_pkce');
+                hideBanner();
+                updateUI();
+                // Modal sudah tertutup — langsung load data
+                loadData();
             } catch (e) {
-                showAuthStatus(`Error: ${e.message}`, 'error');
+                showBanner(`Login gagal: ${e.message}`, 'error');
+                localStorage.removeItem('simkl_pkce');
+                $('#authModal').classList.remove('hidden');
             }
         }
 
@@ -282,13 +294,15 @@
             }
 
             if (res.status === 412) {
-                // client_id tidak cocok dengan token — clear dan paksa re-login
-                localStorage.removeItem('simkl_client_id');
-                localStorage.removeItem('simkl_auth');
-                state = { clientId: '', accessToken: '', refreshToken: '', tokenExpiry: 0 };
+                // client_id tidak cocok dengan token — hapus token, PERTAHANKAN clientId agar input terisi
+                state.accessToken = '';
+                state.refreshToken = '';
+                state.tokenExpiry = 0;
+                localStorage.setItem('simkl_auth', JSON.stringify(state));
                 updateUI();
+                $('#clientIdInput').value = state.clientId || '';
                 $('#authModal').classList.remove('hidden');
-                throw new Error('Client ID tidak valid atau telah berubah. Silakan login ulang.');
+                throw new Error('Client ID tidak cocok dengan token. Silakan login ulang.');
             }
 
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -584,6 +598,7 @@
             if (state.accessToken) {
                 loadData();
             } else {
+                $('#clientIdInput').value = state.clientId || '';
                 $('#authModal').classList.remove('hidden');
             }
         }
