@@ -304,9 +304,6 @@
                 if (showsW.status === 'fulfilled') {
                     wlItems = showsW.value.shows || [];
                 }
-                if (moviesW.status === 'fulfilled') {
-                    wlItems = [...wlItems, ...(moviesW.value.movies || [])];
-                }
                 if (animeW.status === 'fulfilled') {
                     wlItems = [...wlItems, ...(animeW.value.shows || [])];
                 }
