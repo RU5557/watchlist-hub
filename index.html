@@ -275,7 +275,17 @@
                     await refreshToken();
                     return fetchSimkl(endpoint);
                 }
-                throw new Error('Token expired, please login again');
+                throw new Error('Token expired. Silakan login ulang di Settings.');
+            }
+
+            if (res.status === 412) {
+                // client_id tidak cocok dengan token — clear dan paksa re-login
+                localStorage.removeItem('simkl_client_id');
+                localStorage.removeItem('simkl_auth');
+                state = { clientId: '', accessToken: '', refreshToken: '', tokenExpiry: 0 };
+                updateUI();
+                $('#authModal').classList.remove('hidden');
+                throw new Error('Client ID tidak valid atau telah berubah. Silakan login ulang.');
             }
 
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
