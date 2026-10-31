@@ -29,12 +29,12 @@
 
         <section id="continueWatchingSection" class="hidden mb-8">
             <h2 class="text-lg font-semibold mb-3 text-slate-300">Continue Watching</h2>
-            <div id="continueWatchingGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
+            <div id="continueWatchingGrid" class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-3"></div>
         </section>
 
         <section id="planToWatchSection" class="hidden">
             <h2 class="text-lg font-semibold mb-3 text-slate-300">Plan to Watch</h2>
-            <div id="planToWatchGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"></div>
+            <div id="planToWatchGrid" class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-3"></div>
         </section>
     </div>
 
@@ -312,8 +312,16 @@
                 processList(moviesRes);
                 processList(animeRes);
 
-                // Limit CW to 20
-                cwItems = cwItems.slice(0, 20);
+                // Helper to get title from item
+                const getTitle = (item) => (item.show || item.movie || item)?.title || '';
+
+                // Sort alphabetically
+                cwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b)));
+                ptwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b)));
+
+                // Limit each section to max 9
+                cwItems = cwItems.slice(0, 9);
+                ptwItems = ptwItems.slice(0, 9);
 
                 renderGrid(document.getElementById('continueWatchingGrid'), cwItems);
                 renderGrid(document.getElementById('planToWatchGrid'), ptwItems);
