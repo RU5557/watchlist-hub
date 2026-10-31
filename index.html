@@ -232,6 +232,19 @@
             return res.json();
         }
 
+        // Public fetch - untuk endpoint katalog/detail yang tidak butuh token
+        async function fetchSimklPublic(endpoint) {
+            const separator = endpoint.includes('?') ? '&' : '?';
+            const url = `${SIMKL_BASE}${endpoint}${separator}client_id=${auth.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`;
+            
+            const res = await fetch(url, {
+                headers: { 'User-Agent': `${APP_NAME}/${APP_VERSION}` }
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        }
+
         function loadAuth() {
             const stored = localStorage.getItem('simkl_auth');
             if (stored) {
@@ -403,7 +416,7 @@
             const endpoint = endpointMap[type] || 'tv';
 
             try {
-                const detail = await fetchSimkl(`/${endpoint}/${simklId}?extended=full`);
+                const detail = await fetchSimklPublic(`/${endpoint}/${simklId}?extended=full`);
                 if (!detail || !detail.id) return;
 
                 // Update modal dengan detail
