@@ -416,12 +416,19 @@
             const endpoint = endpointMap[type] || 'tv';
 
             try {
-                const detail = await fetchSimklPublic(`/${endpoint}/${simklId}?extended=full`);
-                if (!detail || !detail.id) return;
+                // Gunakan fetchSimkl (pakai auth token) untuk detail lengkap
+                const detail = await fetchSimkl(`/${endpoint}/${simklId}?extended=full`);
+                if (!detail || !detail.id) {
+                    console.warn('Detail tidak ditemukan untuk', simklId);
+                    return;
+                }
 
                 // Update modal dengan detail
                 const meta = document.getElementById('modalMetadata');
-                if (meta) {
+                if (!meta) {
+                    console.error('modalMetadata element not found');
+                    return;
+                }
                     let html = '';
 
                     // Title & Year
@@ -503,6 +510,10 @@
 
             } catch (e) {
                 console.error('Failed to load detail:', e);
+                const meta = document.getElementById('modalMetadata');
+                if (meta) {
+                    meta.innerHTML = `<p class="text-red-400 text-xs">Gagal memuat detail: ${e.message}</p>`;
+                }
             }
         }
 
