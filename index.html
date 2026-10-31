@@ -88,11 +88,12 @@
 
     <!-- Action Modal -->
     <div id="actionModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 relative">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 relative max-h-[90vh] overflow-y-auto">
             <button id="closeModal" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
-            <h3 id="modalTitle" class="text-lg font-bold mb-1"></h3>
+            <h3 id="modalTitle" class="text-lg font-bold mb-1 pr-8"></h3>
             <p id="modalType" class="text-xs text-slate-400 mb-3"></p>
-            <p id="modalOverview" class="text-sm text-slate-400 mb-6 line-clamp-3"></p>
+            <div id="modalMetadata" class="mb-3"></div>
+            <p id="modalOverview" class="text-sm text-slate-400 mb-6"></p>
             
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Buka di Aplikasi:</p>
             <div class="grid grid-cols-2 gap-3">
@@ -344,7 +345,7 @@
                 const type = show?.type || item.type || 'show';
                 const poster = show?.poster ? `https://simkl.in/posters/${show.poster}_m.jpg` : '';
 
-                return `<article class="group relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 transition cursor-pointer" data-title="${title}" data-overview="${overview}" data-type="${type}">
+                return `<article class="group relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 transition cursor-pointer" data-title="${title}" data-overview="${overview}" data-type="${type}" data-simkl-id="${show?.ids?.simkl || ''}" data-endpoint-type="${type}">
                     <div class="aspect-[2/3] relative overflow-hidden bg-slate-800">
                         ${poster ? `<img src="${poster}" alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy">` : '<div class="w-full h-full flex items-center justify-center text-slate-600">No Image</div>'}
                         <div class="absolute top-2 right-2">
@@ -358,16 +359,28 @@
             }).join('');
 
             grid.querySelectorAll('article').forEach(card => {
-                card.addEventListener('click', () => {
+                card.addEventListener('click', async () => {
+                    const simklId = card.dataset.simklId;
+                    const epType = card.dataset.endpointType;
+                    const show = card.dataset.title;
+
                     selectedItem = {
-                        title: card.dataset.title,
+                        title: show,
                         overview: card.dataset.overview,
-                        type: card.dataset.type
+                        type: card.dataset.type,
+                        simklId,
+                        epType
                     };
+
                     document.getElementById('modalTitle').textContent = selectedItem.title;
                     document.getElementById('modalType').textContent = formatType(selectedItem.type);
                     document.getElementById('modalOverview').textContent = selectedItem.overview || 'Tidak ada deskripsi.';
                     document.getElementById('actionModal').classList.remove('hidden');
+
+                    // Fetch detail jika ada simklId
+                    if (simklId) {
+                        await loadDetail(simklId, epType);
+                    }
                 });
             });
         }
@@ -382,6 +395,102 @@
             const url = intent.replace('{q}', encodeURIComponent(selectedItem.title));
             window.location.href = url;
             document.getElementById('actionModal').classList.add('hidden');
+        }
+
+        // Fungsi untuk ambil detail metadata dari SIMKL
+        async function loadDetail(simklId, type) {
+            const endpointMap = { show: 'tv', movie: 'movies', anime: 'anime' };
+            const endpoint = endpointMap[type] || 'tv';
+
+            try {
+                const detail = await fetchSimkl(`/${endpoint}/${simklId}?extended=full`);
+                if (!detail || !detail.id) return;
+
+                // Update modal dengan detail
+                const meta = document.getElementById('modalMetadata');
+                if (meta) {
+                    let html = '';
+
+                    // Title & Year
+                    html += `<p class="text-sm text-slate-300 font-medium">${detail.title || ''} (${detail.year || ''})</p>`;
+
+                    // Genres
+                    if (detail.genres && detail.genres.length > 0) {
+                        html += `<p class="text-xs text-slate-400 mt-1">${detail.genres.join(' • ')}</p>`;
+                    }
+
+                    // Ratings
+                    if (detail.ratings) {
+                        const simklRating = detail.ratings.simkl;
+                        const imdbRating = detail.ratings.imdb;
+                        let ratings = [];
+                        if (simklRating) ratings.push(`★ ${simklRating.rating}/10`);
+                        if (imdbRating) ratings.push(`IMDb ${imdbRating.rating}/10`);
+                        if (ratings.length > 0) {
+                            html += `<p class="text-xs text-slate-400 mt-1">${ratings.join(' • ')}</p>`;
+                        }
+                    }
+
+                    // Runtime
+                    if (detail.runtime) {
+                        html += `<p class="text-xs text-slate-500 mt-1">Duration: ${detail.runtime} min</p>`;
+                    }
+
+                    // Certification
+                    if (detail.certification) {
+                        html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.certification}</span>`;
+                    }
+
+                    // Network / Country
+                    if (detail.network) {
+                        html += `<p class="text-xs text-slate-500 mt-1">${detail.network}</p>`;
+                    }
+                    if (detail.country) {
+                        html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.country}</span>`;
+                    }
+
+                    // Status
+                    if (detail.status) {
+                        html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.status}</span>`;
+                    }
+
+                    // First/Last Aired (TV/Anime)
+                    if (detail.first_aired) {
+                        html += `<p class="text-xs text-slate-500 mt-1">First Aired: ${detail.first_aired}</p>`;
+                    }
+                    if (detail.last_aired) {
+                        html += `<p class="text-xs text-slate-500 mt-1">Last Aired: ${detail.last_aired}</p>`;
+                    }
+
+                    // Original Language
+                    if (detail.original_language) {
+                        html += `<p class="text-xs text-slate-500 mt-1">Language: ${detail.original_language.toUpperCase()}</p>`;
+                    }
+
+                    // Fansart
+                    if (detail.fanart) {
+                        html += `<img src="https://simkl.in/fanart/${detail.fanart}_m.jpg" alt="fanart" class="mt-3 w-full rounded-lg object-cover h-40" onerror="this.style.display='none'">`;
+                    }
+
+                    // Trailer
+                    if (detail.trailers && detail.trailers.length > 0) {
+                        const trailer = detail.trailers.find(t => t.type === 'trailer');
+                        if (trailer && trailer.youtube) {
+                            html += `<a href="https://www.youtube.com/watch?v=${trailer.youtube}" target="_blank" class="inline-block mt-3 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-500 transition">▶ Watch Trailer</a>`;
+                        }
+                    }
+
+                    meta.innerHTML = html || '<p class="text-slate-400 text-sm">No metadata available.</p>';
+                }
+
+                // Update overview jika lebih lengkap
+                if (detail.overview) {
+                    document.getElementById('modalOverview').textContent = detail.overview;
+                }
+
+            } catch (e) {
+                console.error('Failed to load detail:', e);
+            }
         }
 
         // Helper
