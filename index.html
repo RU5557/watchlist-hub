@@ -220,14 +220,50 @@
             const separator = endpoint.includes('?') ? '&' : '?';
             const url = `${SIMKL_BASE}${endpoint}${separator}client_id=${auth.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`;
             
-            const res = await fetch(url, {
+            let res = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${auth.accessToken}`,
                     'User-Agent': `${APP_NAME}/${APP_VERSION}`
                 }
             });
 
-            if (res.status === 401) throw new Error('Token expired');
+            if (res.status === 401) {
+                // Token expired -> refresh & retry sekali
+                if (auth.refreshToken) {
+                    try {
+                        const refreshRes = await fetch(`${SIMKL_BASE}/oauth2/token`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                client_id: auth.clientId,
+                                refresh_token: auth.refreshToken,
+                                grant_type: 'refresh_token'
+                            })
+                        });
+                        if (refreshRes.ok) {
+                            const data = await refreshRes.json();
+                            auth.accessToken = data.access_token;
+                            auth.refreshToken = data.refresh_token;
+                            auth.tokenExpiry = Date.now() + (data.expires_in * 1000);
+                            localStorage.setItem('simkl_auth', JSON.stringify(auth));
+                            // Retry original request
+                            res = await fetch(url, {
+                                headers: {
+                                    Authorization: `Bearer ${auth.accessToken}`,
+                                    'User-Agent': `${APP_NAME}/${APP_VERSION}`
+                                }
+                            });
+                        } else {
+                            throw new Error('Refresh token expired');
+                        }
+                    } catch (e) {
+                        throw new Error('Token expired, silakan login ulang');
+                    }
+                } else {
+                    throw new Error('Token expired, silakan login ulang');
+                }
+            }
+
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.json();
         }
