@@ -221,7 +221,9 @@
         async function fetchSimkl(endpoint) {
             if (!auth.accessToken) throw new Error('Tidak ada access token');
 
-            const url = `${SIMKL_BASE}${endpoint}?client_id=${auth.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`;
+            const separator = endpoint.includes('?') ? '&' : '?';
+            const url = `${SIMKL_BASE}${endpoint}${separator}client_id=${auth.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`;
+            
             const res = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${auth.accessToken}`,
@@ -282,10 +284,11 @@
 
             showLoading(true);
             try {
-                const [playback, watching, plantowatch] = await Promise.allSettled([
+                const [playback, watching, plantowatch, animeWatching] = await Promise.allSettled([
                     fetchSimkl('/sync/playback'),
                     fetchSimkl('/sync/all-items/shows/watching?extended=full'),
-                    fetchSimkl('/sync/all-items/shows/plantowatch?extended=full')
+                    fetchSimkl('/sync/all-items/shows/plantowatch?extended=full'),
+                    fetchSimkl('/sync/all-items/anime/watching?extended=full')
                 ]);
 
                 let cwItems = [];
@@ -300,6 +303,12 @@
                 }
                 if (plantowatch.status === 'fulfilled') {
                     ptwItems = plantowatch.value.shows || [];
+                }
+
+                // Add anime watching to Continue Watching
+                if (animeWatching.status === 'fulfilled') {
+                    const animeItems = animeWatching.value.shows || [];
+                    cwItems = [...cwItems, ...animeItems].slice(0, 20);
                 }
 
                 renderGrid(document.getElementById('continueWatchingGrid'), cwItems);
