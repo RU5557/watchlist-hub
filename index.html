@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#0f172a">
     <title>Watchlist Hub</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <base href="/watchlist-hub/">
     <link rel="manifest" href="/watchlist-hub/manifest.json">
     <link rel="icon" type="image/svg+xml" href="/watchlist-hub/favicon.svg">
     <script>
@@ -114,7 +113,7 @@
     </div>
 
     <script>
-        // ===== HELPER (didefinisikan di paling atas) =====
+        // ===== HELPER =====
         const $ = sel => document.querySelector(sel);
         const $$ = sel => document.querySelectorAll(sel);
 
@@ -352,8 +351,8 @@
                 // Helper untuk proses item dari /sync/all-items/{type}
                 const processItem = (item, type) => {
                     item.type = type; // tetapkan type agar renderGrid bisa pakai
-if (item.status === 'watching') wlItems.push(item);
-            else if (item.status === 'plantowatch') ptwItems.push(item);
+                    if (item.status === 'watching') wlItems.push(item);
+                    else if (item.status === 'plantowatch') ptwItems.push(item);
                 };
 
                 if (allItems.status === 'fulfilled' && allItems.value) {
