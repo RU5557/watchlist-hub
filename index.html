@@ -472,9 +472,14 @@
                 case 'nuvio':
                     intentUrl = APP_INTENTS.nuvio.replace('{q}', encodedQuery);
                     break;
-                case 'cloudstream':
-                    intentUrl = APP_INTENTS.cloudstream.replace('{q}', encodedQuery);
-                    break;
+                case 'cloudstream': {
+                    const fallback = encodeURIComponent('https://github.com/recloudstream/cloudstream');
+                    intentUrl = `intent://#Intent;package=com.lagradost.cloudstream3;component=com.lagradost.cloudstream3/com.lagradost.cloudstream3.ui.MainActivity;S.browser_fallback_url=${fallback};end;`;
+                    const a = document.createElement('a');
+                    a.href = intentUrl;
+                    a.click();
+                    return;
+                }
                 case 'netflix':
                     window.location.href = APP_INTENTS.netflix.replace('{q}', encodedQuery);
                     return;
