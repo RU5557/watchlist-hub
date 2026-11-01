@@ -46,17 +46,13 @@
         </section>
     </div>
 
-    <div id="emptyState" class="hidden text-center py-12">
-        <svg class="mx-auto h-16 w-16 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        <p class="mt-3 text-slate-400">Tidak ada data. Periksa pengaturan SIMKL.</p>
-    </div>
-
     <!-- Auth Modal -->
     <div id="authModal" class="fixed inset-0 bg-black/80 hidden items-center justify-center p-4 z-50">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 relative">
             <button id="closeAuth" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
             <h3 class="text-xl font-bold mb-2">Login ke SIMKL</h3>
             <p class="text-sm text-slate-400 mb-6">Daftar app di <a href="https://simkl.com/settings/developer/" target="_blank" class="text-indigo-400 hover:underline">SIMKL Developer</a> pilih <strong>Mobile/Desktop/Browser Apps</strong></p>
+            
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-1">Client ID</label>
@@ -78,6 +74,7 @@
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 relative">
             <button id="closeSettings" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
             <h3 class="text-xl font-bold mb-6">Pengaturan</h3>
+            
             <div class="space-y-4">
                 <div>
                     <p class="text-sm font-medium text-slate-300 mb-2">Status</p>
@@ -251,7 +248,7 @@
                             refresh_token: auth.refreshToken,
                             grant_type: 'refresh_token'
                         })
-                    });
+                    };
                     if (refreshRes.ok) {
                         const data = await refreshRes.json();
                         auth.accessToken = data.access_token;
@@ -276,7 +273,19 @@
             return res.json();
         }
 
-        // ===== AUTH STATE =====
+        // Public fetch - untuk endpoint katalog/detail yang tidak butuh token
+        async function fetchSimklPublic(endpoint) {
+            const separator = endpoint.includes('?') ? '&' : '?';
+            const url = `${SIMKL_BASE}${endpoint}${separator}client_id=${auth.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`;
+
+            const res = await fetch(url, {
+                headers: { 'User-Agent': `${APP_NAME}/${APP_VERSION}` }
+            });
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        }
+
         function loadAuth() {
             const stored = localStorage.getItem('simkl_auth');
             if (stored) {
@@ -314,7 +323,7 @@
             $('#planToWatchSection').classList.toggle('hidden', show);
         }
 
-        // ===== LOAD DATA (sesuai SIMKL Sync Guide) =====
+        // ===== LOAD DATA (sesuai WORKFLOW.md) =====
         async function loadData() {
             if (!auth.accessToken) {
                 showBanner('Login terlebih dahulu');
@@ -339,12 +348,18 @@
                     cwItems = [...(playback.value.shows || []), ...(playback.value.movies || [])].slice(0, 9);
                 }
 
-                // Proses all-items (shows, movies, anime)
+                // Helper untuk proses item dari /sync/all-items/{type}
+                const processItem = (item, type) => {
+                    item.type = type; // tetapkan type agar renderGrid bisa pakai
+                    if (item.status === 'watching') wl.push(item);
+                    else if (item.status === 'plantowatch') ptw.push(item);
+                };
+
                 if (allItems.status === 'fulfilled' && allItems.value) {
                     const data = allItems.value;
-                    (data.shows || []).forEach(item => processItem(item, 'show', wlItems, ptwItems, cwItems));
-                    (data.movies || []).forEach(item => processItem(item, 'movie', wlItems, ptwItems, cwItems));
-                    (data.anime || []).forEach(item => processItem(item, 'anime', wlItems, ptwItems, cwItems));
+                    (data.shows || []).forEach(item => processItem(item, 'show'));
+                    (data.movies || []).forEach(item => processItem(item, 'movie'));
+                    (data.anime || []).forEach(item => processItem(item, 'anime'));
                 }
 
                 // Sort A-Z dan batasi 9 per section
@@ -368,80 +383,15 @@
             }
         }
 
-        function processItem(item, type, wl, ptw, cw) {
-            const status = item.status;
-            item.type = type;
-            if (status === 'watching') wl.push(item);
-            else if (status === 'plantowatch') ptw.push(item);
-        }
-
-        // ===== RENDER GRID =====
-        function renderGrid(grid, items) {
-            grid.innerHTML = (items || []).map(item => {
-                const title = item.title || 'Unknown';
-                const overview = item.overview || '';
-                const type = item.type || 'show';
-                const poster = item.poster ? `https://simkl.in/posters/${item.poster}_m.jpg` : '';
-
-                return `<article class="group relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 transition cursor-pointer" data-title="${title}" data-overview="${overview}" data-type="${type}" data-simkl-id="${item.ids?.simkl || ''}" data-endpoint-type="${type}">
-                    <div class="aspect-[2/3] relative overflow-hidden bg-slate-800">
-                        ${poster ? `<img src="${poster}" alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy">` : '<div class="w-full h-full flex items-center justify-center text-slate-600">No Image</div>'}
-                        <div class="absolute top-2 right-2">
-                            <span class="px-1.5 py-0.5 text-xs font-medium rounded bg-black/80 text-white">${type === 'show' ? 'TV' : type === 'anime' ? 'Anime' : 'Movie'}</span>
-                        </div>
-                    </div>
-                    <div class="p-3">
-                        <h4 class="font-medium text-sm truncate">${title}</h4>
-                    </div>
-                </article>`;
-            }).join('');
-
-            grid.querySelectorAll('article').forEach(card => {
-                card.addEventListener('click', async () => {
-                    const simklId = card.dataset.simklId;
-                    const epType = card.dataset.endpointType;
-                    const show = card.dataset.title;
-
-                    selectedItem = {
-                        title: show,
-                        overview: card.dataset.overview,
-                        type: card.dataset.type,
-                        simklId,
-                        epType
-                    };
-
-                    $('#modalTitle').textContent = selectedItem.title;
-                    $('#modalType').textContent = formatType(selectedItem.type);
-                    $('#modalOverview').textContent = selectedItem.overview || 'Tidak ada deskripsi.';
-                    $('#actionModal').classList.remove('hidden');
-
-                    if (simklId) {
-                        await loadDetail(simklId, epType);
-                    }
-                });
-            });
-        }
-
-        function formatType(type) {
-            return type === 'show' ? 'TV Series' : type === 'anime' ? 'Anime' : 'Movie';
-        }
-
-        function launchApp(appKey) {
-            if (!selectedItem) return;
-            const intent = APP_INTENTS[appKey];
-            const url = intent.replace('{q}', encodeURIComponent(selectedItem.title));
-            window.location.href = url;
-            $('#actionModal').classList.add('hidden');
-        }
-
-        // ===== LOAD DETAIL (endpoint publik) =====
+        // Fungsi untuk ambil metadata detail dari SIMKL
         async function loadDetail(simklId, type) {
             const endpointMap = { show: 'tv', movie: 'movies', anime: 'anime' };
             const endpoint = endpointMap[type] || 'tv';
 
             try {
+                // Gunakan fetchSimkl (pakai auth token untuk detail lengkap)
                 const detail = await fetchSimkl(`/${endpoint}/${simklId}?extended=full`);
-                if (!detail || !detail.id) {
+                if (!detail || !detail.ids?.simkl) {
                     console.warn('Detail tidak ditemukan untuk', simklId);
                     return;
                 }
@@ -454,12 +404,15 @@
 
                 let html = '';
 
+                // Title & Year
                 html += `<p class="text-sm text-slate-300 font-medium">${detail.title || ''} (${detail.year || ''})</p>`;
 
+                // Genres
                 if (detail.genres && detail.genres.length > 0) {
                     html += `<p class="text-xs text-slate-400 mt-1">${detail.genres.join(' • ')}</p>`;
                 }
 
+                // Ratings
                 if (detail.ratings) {
                     const ratings = [];
                     if (detail.ratings.simkl) ratings.push(`★ ${detail.ratings.simkl.rating}/10`);
@@ -467,19 +420,32 @@
                     if (ratings.length > 0) html += `<p class="text-xs text-slate-400 mt-1">${ratings.join(' • ')}</p>`;
                 }
 
+                // Runtime
                 if (detail.runtime) html += `<p class="text-xs text-slate-500 mt-1">Duration: ${detail.runtime} min</p>`;
+
+                // Certification
                 if (detail.certification) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.certification}</span>`;
+
+                // Network / Country
                 if (detail.network) html += `<p class="text-xs text-slate-500 mt-1">${detail.network}</p>`;
                 if (detail.country) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.country}</span>`;
+
+                // Status
                 if (detail.status) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.status}</span>`;
+
+                // First/Last Aired (TV/Anime)
                 if (detail.first_aired) html += `<p class="text-xs text-slate-500 mt-1">First Aired: ${detail.first_aired}</p>`;
                 if (detail.last_aired) html += `<p class="text-xs text-slate-500 mt-1">Last Aired: ${detail.last_aired}</p>`;
+
+                // Original Language
                 if (detail.original_language) html += `<p class="text-xs text-slate-500 mt-1">Language: ${detail.original_language.toUpperCase()}</p>`;
 
+                // Fansart
                 if (detail.fanart) {
                     html += `<img src="https://simkl.in/fanart/${detail.fanart}_m.jpg" alt="fanart" class="mt-3 w-full rounded-lg object-cover h-40" onerror="this.style.display='none'">`;
                 }
 
+                // Trailer
                 if (detail.trailers && detail.trailers.length > 0) {
                     const trailer = detail.trailers.find(t => t.type === 'trailer');
                     if (trailer && trailer.youtube) {
@@ -489,6 +455,7 @@
 
                 meta.innerHTML = html || '<p class="text-slate-400 text-sm">No metadata available.</p>';
 
+                // Update overview jika lebih lengkap
                 if (detail.overview) {
                     $('#modalOverview').textContent = detail.overview;
                 }
