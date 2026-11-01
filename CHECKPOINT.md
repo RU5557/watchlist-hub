@@ -1,11 +1,11 @@
-# Watchlist Hub - Checkpoint v6 (SUCCESS - Android Intent Launcher Fixed)
+# Watchlist Hub - Checkpoint v7 (SUCCESS - All App Intents Working)
 
-**Status:** ✅ FULLY WORKING - Package intent Android untuk Nuvio (`app.nuvio.player`) dan Cloudstream (`com.lagradost.cloudstream3`) sudah disesuaikan agar langsung meluncurkan aplikasi dengan mulus.
+**Status:** ✅ FULLY WORKING - Seluruh intent launcher (Stremio, Nuvio, Cloudstream, Netflix) berhasil terhubung menggunakan skema kustom resmi (`stremio://`, `nuvio://`, `cloudstream://deeplink?query=`, dan Netflix web URL).
 
 ---
 
 ## 📁 FILE PENTING
-- `index.html` — Single file PWA (Tailwind v4 CDN + Vanilla JS) dengan Android Intent Launcher
+- `index.html` — Single file PWA (Tailwind v4 CDN + Vanilla JS) dengan Intent Launcher
 - `WORKFLOW.md` — Dokumentasi workflow lengkap dari api.simkl.org + stremio-simkl
 - `manifest.json`, `sw.js`, `favicon.svg` — PWA assets
 - `README.md` — Cara pakai
@@ -13,16 +13,11 @@
 
 ---
 
-## 🚀 ARSITEKTUR & UPDATE TERBARU
-
-### App Intent Launcher (Android Mobile)
-- **Stremio**: `intent://search?q={q}#Intent;package=com.stremio.one;end;`
-- **Nuvio**: `intent://search?q={q}#Intent;package=app.nuvio.player;end;`
-- **Cloudstream**: `intent://details?q={q}#Intent;package=com.lagradost.cloudstream3;end;`
+## 🚀 INTENT LAUNCHER CONFIG
+- **Stremio**: `stremio://detail?q={q}`
+- **Nuvio**: `nuvio://search?q={q}`
+- **Cloudstream**: `cloudstream://deeplink?query={q}`
 - **Netflix**: `https://www.netflix.com/search?q={q}`
-
-### Auth (OAuth V2 PKCE) & Two-Phase Sync
-- Terintegrasi penuh dengan SIMKL API v2 (PKCE, token exchange, auto-refresh pada 401).
 |-------|--------|
 | Login OAuth V2 PKCE | ✅ |
 | Simpan token ke localStorage | ✅ |
