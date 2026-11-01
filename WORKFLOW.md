@@ -160,11 +160,46 @@ Setiap item di grid:
 
 ---
 
-## 7. Aktifitas yang Harus Dilakukan PWA
-1. Login OAuth V2 PKCE (simpan `access_token` + `refresh_token` di `localStorage`)
-2. Fetch `sync/activities` sebagai snapshot pertama
-3. Fetch `sync/all-items?extended=full` untuk daftar lengkap
-4. Fetch `sync/playback` untuk continue watching
-5. Render 3 section: Continue Watching, Watchlist (watching), Plan to Watch (plantowatch)
-6. Klik kartu → fetch detail `/tv/{id}`, `/movies/{id}`, `/anime/{id}` → tampilkan modal
-7. Intent launcher ke aplikasi Android (Stremio, Nuvio, Cloudstream, Netflix)
+## 8. Debug & Error Handling (sesuai dokumen SIMKL)
+
+### Branch on `error`, never on `message`
+`error` identifier stabil; `message` prose dapat berubah. Selalu baca `error` dan `code` bersama-sama.
+
+### Tabel error utama
+
+| Code | Name | Action |
+| - | - | - |
+| `200` | OK | Sukses |
+| `400` | Bad Request | Jangan retry — perbaiki request |
+| `401` | Unauthorized | Coba refresh token dulu; jika gagal, login ulang |
+| `403` | Forbidden | Tidak bisa diperbaiki retry; perbaiki app atau hubungi kami |
+| `404` | Not Found | Jangan retry |
+| `409` | Conflict | Jangan retry (misal: sudah ditonton) |
+| `412` | client_id failed | Jangan retry unchanged — periksa client_id |
+| `429` | Too Many Requests | Baca `error` dalam body: `rate_limit` (1 detik), `user_limit_exceeded` / `app_limit_exceeded` (wait `Retry-After`) |
+| `500`/`502`/`503` | Server error | Exponential backoff (1s, 2s, 4s, 8s, 16s), give up after 5 |
+
+### Handling 429
+Baca `error` dalam body sebelum memutuskan waktu tunggu:
+- `rate_limit`: jeda ~1 detik, lalu retry
+- `user_limit_exceeded`: tunggu `Retry-After` detik, hanya user itu terpengaruh
+- `app_limit_exceeded`: tunggu `Retry-After` detik, semua user terpengaruh
+
+**Jangan gunakan exponential backoff untuk daily 429** — quota reset setiap tengah malam US Eastern, bukan rollback 24 jam.
+
+### Header yang membantu
+| Header | Keterangan |
+| - | - |
+| `X-RateLimit-Limit` | Kuota harian user (AUTH V2 only) |
+| `X-RateLimit-Remaining` | Sisa request hari ini |
+| `Retry-After` | Detik hingga reset (hanya pada 429 daily quota) |
+
+### Testing rate limit (debug_only)
+Tambahkan `?debug_limit=user` atau `?debug_limit=app` pada URL untuk memicu 429 sengaja untuk testing.
+
+### Link balik ke Simkl (wajib)
+Setiap item Simkl harus direfs ke `https://simkl.com/:section/:simkl_id/:slug` dengan `ids.simkl` dan `ids.slug` dari response.
+
+---
+
+
