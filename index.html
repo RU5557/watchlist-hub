@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#0f172a">
     <title>Watchlist Hub</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <link rel="manifest" href="/watchlist-hub/manifest.json">
-    <link rel="icon" type="image/svg+xml" href="/watchlist-hub/favicon.svg">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg">
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -59,7 +59,7 @@
                     <input type="text" id="clientIdInput" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div class="text-xs text-slate-500 bg-slate-800/50 p-2 rounded">
-                    Redirect URI: <code class="text-slate-300">https://ru5557.github.io/watchlist-hub</code>
+                    Redirect URI: <code class="text-slate-300" id="redirectUriDisplay"></code>
                 </div>
             </div>
             <div class="mt-6 flex flex-col gap-3">
@@ -120,9 +120,11 @@
         // ===== KONFIGURASI =====
         const SIMKL_BASE = 'https://api.simkl.com';
         const SIMKL_AUTH = 'https://simkl.com/oauth2';
-        const REDIRECT_URI = window.location.origin + window.location.pathname.replace(/\/$/, '');
+        const REDIRECT_URI = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '');
         const APP_NAME = 'watchlist-hub';
         const APP_VERSION = '1.0';
+
+        $('#redirectUriDisplay').textContent = REDIRECT_URI;
 
         const APP_INTENTS = {
             stremio: 'intent://search?q={q}#Intent;package=com.stremio.one;end;',
@@ -234,7 +236,8 @@
             let res = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${auth.accessToken}`,
-                    'User-Agent': `${APP_NAME}/${APP_VERSION}`
+                    'User-Agent': `${APP_NAME}/${APP_VERSION}`,
+                    'simkl-api-key': auth.clientId
                 }
             });
 
@@ -258,7 +261,8 @@
                         res = await fetch(url, {
                             headers: {
                                 Authorization: `Bearer ${auth.accessToken}`,
-                                'User-Agent': `${APP_NAME}/${APP_VERSION}`
+                                'User-Agent': `${APP_NAME}/${APP_VERSION}`,
+                                'simkl-api-key': auth.clientId
                             }
                         });
                     } else {
@@ -273,23 +277,14 @@
             return res.json();
         }
 
-        // Public fetch - untuk endpoint katalog/detail yang tidak butuh token
-        async function fetchSimklPublic(endpoint) {
-            const separator = endpoint.includes('?') ? '&' : '?';
-            const url = `${SIMKL_BASE}${endpoint}${separator}client_id=${auth.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`;
-
-            const res = await fetch(url, {
-                headers: { 'User-Agent': `${APP_NAME}/${APP_VERSION}` }
-            });
-
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.json();
-        }
-
         function loadAuth() {
             const stored = localStorage.getItem('simkl_auth');
             if (stored) {
                 try { auth = JSON.parse(stored); } catch {}
+            }
+            if (!auth.clientId) {
+                const savedClient = localStorage.getItem('simkl_client_id');
+                if (savedClient) auth.clientId = savedClient;
             }
         }
 
@@ -300,6 +295,9 @@
             $('#clientDisplay').textContent = loggedIn ? `Client: ${auth.clientId}` : '';
             $('#logoutBtn').style.display = loggedIn ? 'block' : 'none';
             $('#loginAgainBtn').style.display = loggedIn ? 'block' : 'none';
+            if (auth.clientId) {
+                $('#clientIdInput').value = auth.clientId;
+            }
         }
 
         function showAuthStatus(msg, type = 'info') {
@@ -323,7 +321,47 @@
             $('#planToWatchSection').classList.toggle('hidden', show);
         }
 
-        // ===== LOAD DATA (sesuai WORKFLOW.md) =====
+        // ===== RENDER GRID (Ditambahkan kembali) =====
+        function renderGrid(container, items) {
+            container.innerHTML = '';
+            items.forEach(item => {
+                const rawObj = item.show || item.movie || item.anime || item;
+                const title = rawObj.title || 'Unknown Title';
+                const posterPath = rawObj.poster;
+                const posterUrl = posterPath ? `https://simkl.in/posters/${posterPath}_m.jpg` : '';
+                const simklId = rawObj.ids?.simkl;
+                const type = item.type || (item.show ? 'show' : item.movie ? 'movie' : 'anime');
+
+                const card = document.createElement('div');
+                card.className = 'bg-slate-900 border border-slate-800 rounded-xl overflow-hidden cursor-pointer hover:border-indigo-500 transition group';
+                card.innerHTML = `
+                    <div class="aspect-[2/3] bg-slate-800 relative overflow-hidden">
+                        ${posterUrl ? `<img src="${posterUrl}" alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy">` : '<div class="flex items-center justify-center h-full text-xs text-slate-500">No Poster</div>'}
+                    </div>
+                    <div class="p-2">
+                        <p class="text-xs font-medium text-slate-200 truncate">${title}</p>
+                    </div>
+                `;
+                
+                card.addEventListener('click', () => {
+                    selectedItem = { simklId, type, title, overview: rawObj.overview };
+                    $('#modalTitle').textContent = title;
+                    $('#modalType').textContent = type.toUpperCase();
+                    $('#modalOverview').textContent = rawObj.overview || 'Memuat overview...';
+                    $('#modalMetadata').innerHTML = '<p class="text-xs text-slate-400">Memuat detail...</p>';
+                    $('#actionModal').classList.remove('hidden');
+                    $('#actionModal').classList.add('flex');
+
+                    if (simklId) {
+                        loadDetail(simklId, type);
+                    }
+                });
+
+                container.appendChild(card);
+            });
+        }
+
+        // ===== LOAD DATA =====
         async function loadData() {
             if (!auth.accessToken) {
                 showBanner('Login terlebih dahulu');
@@ -333,7 +371,6 @@
 
             showLoading(true);
             try {
-                // Phase 1: Ambil playback + all-items
                 const [playback, allItems] = await Promise.allSettled([
                     fetchSimkl('/sync/playback'),
                     fetchSimkl('/sync/all-items?extended=full')
@@ -343,14 +380,12 @@
                 let wlItems = [];
                 let ptwItems = [];
 
-                // Continue Watching dari playback
                 if (playback.status === 'fulfilled' && playback.value) {
                     cwItems = [...(playback.value.shows || []), ...(playback.value.movies || [])].slice(0, 9);
                 }
 
-// Helper untuk proses item dari /sync/all-items/{type}
                 const processItem = (item, type) => {
-                    item.type = type; // tetapkan type agar renderGrid bisa pakai
+                    item.type = type;
                     if (item.status === 'watching') wlItems.push(item);
                     else if (item.status === 'plantowatch') ptwItems.push(item);
                 };
@@ -362,11 +397,12 @@
                     (data.anime || []).forEach(item => processItem(item, 'anime'));
                 }
 
-                // Sort A-Z dan batasi 9 per section
                 const getTitle = i => (i.show || i.movie || i.anime || i)?.title || '';
-                cwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
-                wlItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
-                ptwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
+                
+                // Perbaikan assignment sort & slice
+                cwItems = cwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
+                wlItems = wlItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
+                ptwItems = ptwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
 
                 renderGrid($('#continueWatchingGrid'), cwItems);
                 renderGrid($('#watchlistGrid'), wlItems);
@@ -375,7 +411,6 @@
                 $('#continueWatchingSection').classList.toggle('hidden', cwItems.length === 0);
                 $('#watchlistSection').classList.toggle('hidden', wlItems.length === 0);
                 $('#planToWatchSection').classList.toggle('hidden', ptwItems.length === 0);
-                $('#emptyState')?.classList.add('hidden');
             } catch (e) {
                 showBanner(`Error: ${e.message}`);
             } finally {
@@ -383,90 +418,68 @@
             }
         }
 
-        // Fungsi untuk ambil metadata detail dari SIMKL
         async function loadDetail(simklId, type) {
             const endpointMap = { show: 'tv', movie: 'movies', anime: 'anime' };
             const endpoint = endpointMap[type] || 'tv';
 
             try {
-                // Gunakan fetchSimkl (pakai auth token untuk detail lengkap)
                 const detail = await fetchSimkl(`/${endpoint}/${simklId}?extended=full`);
-                if (!detail || !detail.ids?.simkl) {
-                    console.warn('Detail tidak ditemukan untuk', simklId);
-                    return;
-                }
+                if (!detail) return;
 
                 const meta = $('#modalMetadata');
-                if (!meta) {
-                    console.error('modalMetadata element not found');
-                    return;
-                }
+                if (!meta) return;
 
                 let html = '';
-
-                // Title & Year
                 html += `<p class="text-sm text-slate-300 font-medium">${detail.title || ''} (${detail.year || ''})</p>`;
-
-                // Genres
                 if (detail.genres && detail.genres.length > 0) {
                     html += `<p class="text-xs text-slate-400 mt-1">${detail.genres.join(' • ')}</p>`;
                 }
-
-                // Ratings
                 if (detail.ratings) {
                     const ratings = [];
                     if (detail.ratings.simkl) ratings.push(`★ ${detail.ratings.simkl.rating}/10`);
                     if (detail.ratings.imdb) ratings.push(`IMDb ${detail.ratings.imdb.rating}/10`);
                     if (ratings.length > 0) html += `<p class="text-xs text-slate-400 mt-1">${ratings.join(' • ')}</p>`;
                 }
-
-                // Runtime
                 if (detail.runtime) html += `<p class="text-xs text-slate-500 mt-1">Duration: ${detail.runtime} min</p>`;
-
-                // Certification
                 if (detail.certification) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.certification}</span>`;
-
-                // Network / Country
                 if (detail.network) html += `<p class="text-xs text-slate-500 mt-1">${detail.network}</p>`;
                 if (detail.country) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.country}</span>`;
-
-                // Status
-                if (detail.status) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.status}</span>`;
-
-                // First/Last Aired (TV/Anime)
-                if (detail.first_aired) html += `<p class="text-xs text-slate-500 mt-1">First Aired: ${detail.first_aired}</p>`;
-                if (detail.last_aired) html += `<p class="text-xs text-slate-500 mt-1">Last Aired: ${detail.last_aired}</p>`;
-
-                // Original Language
                 if (detail.original_language) html += `<p class="text-xs text-slate-500 mt-1">Language: ${detail.original_language.toUpperCase()}</p>`;
 
-                // Fansart
                 if (detail.fanart) {
                     html += `<img src="https://simkl.in/fanart/${detail.fanart}_m.jpg" alt="fanart" class="mt-3 w-full rounded-lg object-cover h-40" onerror="this.style.display='none'">`;
                 }
 
-                // Trailer
-                if (detail.trailers && detail.trailers.length > 0) {
-                    const trailer = detail.trailers.find(t => t.type === 'trailer');
-                    if (trailer && trailer.youtube) {
-                        html += `<a href="https://www.youtube.com/watch?v=${trailer.youtube}" target="_blank" class="inline-block mt-3 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-500 transition">▶ Watch Trailer</a>`;
-                    }
-                }
-
                 meta.innerHTML = html || '<p class="text-slate-400 text-sm">No metadata available.</p>';
-
-                // Update overview jika lebih lengkap
                 if (detail.overview) {
                     $('#modalOverview').textContent = detail.overview;
                 }
-
             } catch (e) {
                 console.error('Failed to load detail:', e);
-                const meta = $('#modalMetadata');
-                if (meta) {
-                    meta.innerHTML = `<p class="text-red-400 text-xs">Gagal memuat detail: ${e.message}</p>`;
-                }
             }
+        }
+
+        function launchApp(appType) {
+            if (!selectedItem) return;
+            const title = selectedItem.title;
+            const encodedQuery = encodeURIComponent(title);
+            let intentUrl = '';
+
+            switch(appType) {
+                case 'stremio':
+                    intentUrl = APP_INTENTS.stremio.replace('{q}', encodedQuery);
+                    break;
+                case 'nuvio':
+                    intentUrl = APP_INTENTS.nuvio.replace('{q}', encodedQuery);
+                    break;
+                case 'cloudstream':
+                    intentUrl = APP_INTENTS.cloudstream.replace('{q}', encodedQuery);
+                    break;
+                case 'netflix':
+                    window.location.href = APP_INTENTS.netflix.replace('{q}', encodedQuery);
+                    return;
+            }
+            window.location.href = intentUrl;
         }
 
         // ===== EVENT LISTENERS =====
@@ -487,14 +500,17 @@
         });
         $('#closeAuth').addEventListener('click', () => $('#authModal').classList.add('hidden'));
         $('#closeModal').addEventListener('click', () => $('#actionModal').classList.add('hidden'));
+        
         $$('.app-btn').forEach(btn => {
             btn.addEventListener('click', () => launchApp(btn.dataset.app));
         });
+
         [$('#authModal'), $('#settingsModal'), $('#actionModal')].forEach(modal => {
             modal.addEventListener('click', e => {
                 if (e.target === modal) modal.classList.add('hidden');
             });
         });
+
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') {
                 $('#authModal').classList.add('hidden');
