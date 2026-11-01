@@ -14,9 +14,9 @@ class MainActivity : AppCompatActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                    if (url == null) return false
-                    if (url.startsWith("intent://") || url.startsWith("cloudstream://") || url.contains("com.lagradost.cloudstream3")) {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val url = request?.url?.toString() ?: return false
+                    if (url.startsWith("stremio://") || url.startsWith("nuvio://") || url.startsWith("cloudstream://") || url.startsWith("intent://")) {
                         try {
                             val intent = if (url.startsWith("intent://")) {
                                 Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
