@@ -4,6 +4,7 @@ plugins {
 }
 
 android {
+    namespace = "com.watchlist.hub"
     compileSdk = 34
 
     defaultConfig {
