@@ -129,7 +129,7 @@
         const APP_INTENTS = {
             stremio: 'stremio://detail?q={q}',
             nuvio: 'nuvio://search?q={q}',
-            cloudstream: 'cloudstream://details?q={q}',
+            cloudstream: 'intent://#Intent;action=android.intent.action.VIEW;category=android.intent.category.DEFAULT;category=android.intent.category.BROWSABLE;scheme=https;host=cloudstream.custom.host;data=https://cloudstream.custom.host/search?q={q};package=com.lagradost.cloudstream3;end;',
             netflix: 'https://www.netflix.com/search?q={q}'
         };
 
