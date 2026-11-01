@@ -127,9 +127,9 @@
         $('#redirectUriDisplay').textContent = REDIRECT_URI;
 
         const APP_INTENTS = {
-            stremio: 'intent://search?q={q}#Intent;package=com.stremio.one;end;',
-            nuvio: 'intent://search?q={q}#Intent;package=app.nuvio.player;end;',
-            cloudstream: 'intent://details?q={q}#Intent;package=com.lagradost.cloudstream3;end;',
+            stremio: 'stremio://detail?q={q}',
+            nuvio: 'nuvio://search?q={q}',
+            cloudstream: 'cloudstream://details?q={q}',
             netflix: 'https://www.netflix.com/search?q={q}'
         };
 
