@@ -248,7 +248,7 @@
                             refresh_token: auth.refreshToken,
                             grant_type: 'refresh_token'
                         })
-                    };
+                    });
                     if (refreshRes.ok) {
                         const data = await refreshRes.json();
                         auth.accessToken = data.access_token;
