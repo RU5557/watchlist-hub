@@ -26,7 +26,7 @@ jobs:
           mkdir -p app/src/main/res
           mv MainActivity.kt app/src/main/java/com/watchlist/hub/
           mv AndroidManifest.xml app/src/main/
-          mv build.gradle.kts app/
+          mv app.gradle.kts app/build.gradle.kts
           gradle wrapper
           ./gradlew assembleDebug
 
