@@ -342,9 +342,9 @@
                 // Proses all-items (shows, movies, anime)
                 if (allItems.status === 'fulfilled' && allItems.value) {
                     const data = allItems.value;
-                    (data.shows || []).forEach(item => processItem(item, wlItems, ptwItems, cwItems));
-                    (data.movies || []).forEach(item => processItem(item, wlItems, ptwItems, cwItems));
-                    (data.anime || []).forEach(item => processItem(item, wlItems, ptwItems, cwItems));
+                    (data.shows || []).forEach(item => processItem(item, 'show', wlItems, ptwItems, cwItems));
+                    (data.movies || []).forEach(item => processItem(item, 'movie', wlItems, ptwItems, cwItems));
+                    (data.anime || []).forEach(item => processItem(item, 'anime', wlItems, ptwItems, cwItems));
                 }
 
                 // Sort A-Z dan batasi 9 per section
@@ -368,8 +368,9 @@
             }
         }
 
-        function processItem(item, wl, ptw, cw) {
+        function processItem(item, type, wl, ptw, cw) {
             const status = item.status;
+            item.type = type;
             if (status === 'watching') wl.push(item);
             else if (status === 'plantowatch') ptw.push(item);
         }
@@ -377,13 +378,12 @@
         // ===== RENDER GRID =====
         function renderGrid(grid, items) {
             grid.innerHTML = (items || []).map(item => {
-                const show = item.show || item.movie || item.anime || item;
-                const title = show?.title || 'Unknown';
-                const overview = show?.overview || '';
-                const type = show?.type || item.type || 'show';
-                const poster = show?.poster ? `https://simkl.in/posters/${show.poster}_m.jpg` : '';
+                const title = item.title || 'Unknown';
+                const overview = item.overview || '';
+                const type = item.type || 'show';
+                const poster = item.poster ? `https://simkl.in/posters/${item.poster}_m.jpg` : '';
 
-                return `<article class="group relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 transition cursor-pointer" data-title="${title}" data-overview="${overview}" data-type="${type}" data-simkl-id="${show?.ids?.simkl || ''}" data-endpoint-type="${type}">
+                return `<article class="group relative bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 transition cursor-pointer" data-title="${title}" data-overview="${overview}" data-type="${type}" data-simkl-id="${item.ids?.simkl || ''}" data-endpoint-type="${type}">
                     <div class="aspect-[2/3] relative overflow-hidden bg-slate-800">
                         ${poster ? `<img src="${poster}" alt="${title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy">` : '<div class="w-full h-full flex items-center justify-center text-slate-600">No Image</div>'}
                         <div class="absolute top-2 right-2">
