@@ -27,15 +27,28 @@
             <p class="mt-3 text-slate-400">Memuat data...</p>
         </div>
 
+        <!-- Continue Watching -->
         <section id="continueWatchingSection" class="hidden mb-8">
             <h2 class="text-lg font-semibold mb-3 text-slate-300">Continue Watching</h2>
             <div id="continueWatchingGrid" class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-3"></div>
         </section>
 
+        <!-- My Watchlist (status: watching) -->
+        <section id="watchlistSection" class="hidden mb-8">
+            <h2 class="text-lg font-semibold mb-3 text-slate-300">My Watchlist</h2>
+            <div id="watchlistGrid" class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-3"></div>
+        </section>
+
+        <!-- Plan to Watch (status: plantowatch) -->
         <section id="planToWatchSection" class="hidden">
             <h2 class="text-lg font-semibold mb-3 text-slate-300">Plan to Watch</h2>
             <div id="planToWatchGrid" class="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 gap-3"></div>
         </section>
+    </div>
+
+    <div id="emptyState" class="hidden text-center py-12">
+        <svg class="mx-auto h-16 w-16 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <p class="mt-3 text-slate-400">Tidak ada data. Periksa pengaturan SIMKL.</p>
     </div>
 
     <!-- Auth Modal -->
@@ -44,7 +57,6 @@
             <button id="closeAuth" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
             <h3 class="text-xl font-bold mb-2">Login ke SIMKL</h3>
             <p class="text-sm text-slate-400 mb-6">Daftar app di <a href="https://simkl.com/settings/developer/" target="_blank" class="text-indigo-400 hover:underline">SIMKL Developer</a> pilih <strong>Mobile/Desktop/Browser Apps</strong></p>
-            
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-1">Client ID</label>
@@ -66,7 +78,6 @@
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 relative">
             <button id="closeSettings" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
             <h3 class="text-xl font-bold mb-6">Pengaturan</h3>
-            
             <div class="space-y-4">
                 <div>
                     <p class="text-sm font-medium text-slate-300 mb-2">Status</p>
@@ -94,7 +105,6 @@
             <p id="modalType" class="text-xs text-slate-400 mb-3"></p>
             <div id="modalMetadata" class="mb-3"></div>
             <p id="modalOverview" class="text-sm text-slate-400 mb-6"></p>
-            
             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Buka di Aplikasi:</p>
             <div class="grid grid-cols-2 gap-3">
                 <button data-app="stremio" class="app-btn bg-indigo-600 hover:bg-indigo-500 py-2.5 px-4 rounded-xl font-medium text-sm transition">Stremio</button>
@@ -106,6 +116,11 @@
     </div>
 
     <script>
+        // ===== HELPER (didefinisikan di paling atas) =====
+        const $ = sel => document.querySelector(sel);
+        const $$ = sel => document.querySelectorAll(sel);
+
+        // ===== KONFIGURASI =====
         const SIMKL_BASE = 'https://api.simkl.com';
         const SIMKL_AUTH = 'https://simkl.com/oauth2';
         const REDIRECT_URI = window.location.origin + window.location.pathname.replace(/\/$/, '');
@@ -119,23 +134,22 @@
             netflix: 'https://www.netflix.com/search?q={q}'
         };
 
+        // ===== STATE =====
         let auth = { clientId: '', accessToken: '', refreshToken: '', tokenExpiry: 0 };
         let selectedItem = null;
 
-        // ===== SIMPL AUTH V2 PKCE =====
+        // ===== PKCE =====
         async function generatePKCE() {
             const bytes = crypto.getRandomValues(new Uint8Array(32));
-            const verifier = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, c => ({'+':'-','/':'_','=':''}[c]));
-            const challenge = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))))).replace(/[+/=]/g, c => ({'+':'-','/':'_','=':''}[c]));
+            const base64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, c => ({'+':'-','/':'_','=':''}[c]));
+            const verifier = base64url(bytes);
+            const challenge = base64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
             return { verifier, challenge };
         }
 
         async function startLogin() {
-            const clientId = document.getElementById('clientIdInput').value.trim();
-            if (!clientId) {
-                showAuthStatus('Client ID diperlukan', 'error');
-                return;
-            }
+            const clientId = $('#clientIdInput').value.trim();
+            if (!clientId) { showAuthStatus('Client ID diperlukan', 'error'); return; }
 
             auth.clientId = clientId;
             const { verifier, challenge } = await generatePKCE();
@@ -153,6 +167,7 @@
             url.searchParams.set('code_challenge_method', 'S256');
             url.searchParams.set('scope', 'media:read media:write');
 
+            $('#authModal').classList.add('hidden');
             window.location.href = url.toString();
         }
 
@@ -166,9 +181,7 @@
             if (!code) return;
 
             let pkce = null;
-            try {
-                pkce = JSON.parse(localStorage.getItem('simkl_pkce') || 'null');
-            } catch {}
+            try { pkce = JSON.parse(localStorage.getItem('simkl_pkce') || 'null'); } catch {}
 
             if (!pkce || pkce.state !== returnedState) {
                 showBanner('Login gagal: state mismatch', 'error');
@@ -205,7 +218,7 @@
                 localStorage.setItem('simkl_auth', JSON.stringify(auth));
                 localStorage.removeItem('simkl_pkce');
 
-                document.getElementById('authModal').classList.add('hidden');
+                $('#authModal').classList.add('hidden');
                 updateUI();
                 loadData();
             } catch (e) {
@@ -214,12 +227,13 @@
             }
         }
 
+        // ===== FETCH SIMKL (dengan auto-refresh token) =====
         async function fetchSimkl(endpoint) {
             if (!auth.accessToken) throw new Error('Tidak ada access token');
 
             const separator = endpoint.includes('?') ? '&' : '?';
             const url = `${SIMKL_BASE}${endpoint}${separator}client_id=${auth.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`;
-            
+
             let res = await fetch(url, {
                 headers: {
                     Authorization: `Bearer ${auth.accessToken}`,
@@ -227,39 +241,33 @@
                 }
             });
 
-            if (res.status === 401) {
-                // Token expired -> refresh & retry sekali
-                if (auth.refreshToken) {
-                    try {
-                        const refreshRes = await fetch(`${SIMKL_BASE}/oauth2/token`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                client_id: auth.clientId,
-                                refresh_token: auth.refreshToken,
-                                grant_type: 'refresh_token'
-                            })
+            if (res.status === 401 && auth.refreshToken) {
+                try {
+                    const refreshRes = await fetch(`${SIMKL_BASE}/oauth2/token`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            client_id: auth.clientId,
+                            refresh_token: auth.refreshToken,
+                            grant_type: 'refresh_token'
+                        })
+                    });
+                    if (refreshRes.ok) {
+                        const data = await refreshRes.json();
+                        auth.accessToken = data.access_token;
+                        auth.refreshToken = data.refresh_token;
+                        auth.tokenExpiry = Date.now() + (data.expires_in * 1000);
+                        localStorage.setItem('simkl_auth', JSON.stringify(auth));
+                        res = await fetch(url, {
+                            headers: {
+                                Authorization: `Bearer ${auth.accessToken}`,
+                                'User-Agent': `${APP_NAME}/${APP_VERSION}`
+                            }
                         });
-                        if (refreshRes.ok) {
-                            const data = await refreshRes.json();
-                            auth.accessToken = data.access_token;
-                            auth.refreshToken = data.refresh_token;
-                            auth.tokenExpiry = Date.now() + (data.expires_in * 1000);
-                            localStorage.setItem('simkl_auth', JSON.stringify(auth));
-                            // Retry original request
-                            res = await fetch(url, {
-                                headers: {
-                                    Authorization: `Bearer ${auth.accessToken}`,
-                                    'User-Agent': `${APP_NAME}/${APP_VERSION}`
-                                }
-                            });
-                        } else {
-                            throw new Error('Refresh token expired');
-                        }
-                    } catch (e) {
-                        throw new Error('Token expired, silakan login ulang');
+                    } else {
+                        throw new Error('Refresh token expired');
                     }
-                } else {
+                } catch (e) {
                     throw new Error('Token expired, silakan login ulang');
                 }
             }
@@ -268,25 +276,11 @@
             return res.json();
         }
 
-        // Public fetch - untuk endpoint katalog/detail yang tidak butuh token
-        async function fetchSimklPublic(endpoint) {
-            const separator = endpoint.includes('?') ? '&' : '?';
-            const url = `${SIMKL_BASE}${endpoint}${separator}client_id=${auth.clientId}&app-name=${APP_NAME}&app-version=${APP_VERSION}`;
-            
-            const res = await fetch(url, {
-                headers: { 'User-Agent': `${APP_NAME}/${APP_VERSION}` }
-            });
-
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.json();
-        }
-
+        // ===== AUTH STATE =====
         function loadAuth() {
             const stored = localStorage.getItem('simkl_auth');
             if (stored) {
-                try {
-                    auth = JSON.parse(stored);
-                } catch {}
+                try { auth = JSON.parse(stored); } catch {}
             }
         }
 
@@ -316,9 +310,11 @@
         function showLoading(show) {
             $('#loadingState').classList.toggle('hidden', !show);
             $('#continueWatchingSection').classList.toggle('hidden', show);
+            $('#watchlistSection').classList.toggle('hidden', show);
             $('#planToWatchSection').classList.toggle('hidden', show);
         }
 
+        // ===== LOAD DATA (sesuai SIMKL Sync Guide) =====
         async function loadData() {
             if (!auth.accessToken) {
                 showBanner('Login terlebih dahulu');
@@ -328,7 +324,7 @@
 
             showLoading(true);
             try {
-                // Fetch playback + all-items dalam 1 request
+                // Phase 1: Ambil playback + all-items
                 const [playback, allItems] = await Promise.allSettled([
                     fetchSimkl('/sync/playback'),
                     fetchSimkl('/sync/all-items?extended=full')
@@ -338,10 +334,12 @@
                 let wlItems = [];
                 let ptwItems = [];
 
+                // Continue Watching dari playback
                 if (playback.status === 'fulfilled' && playback.value) {
                     cwItems = [...(playback.value.shows || []), ...(playback.value.movies || [])].slice(0, 9);
                 }
 
+                // Proses all-items (shows, movies, anime)
                 if (allItems.status === 'fulfilled' && allItems.value) {
                     const data = allItems.value;
                     (data.shows || []).forEach(item => processItem(item, wlItems, ptwItems, cwItems));
@@ -349,11 +347,11 @@
                     (data.anime || []).forEach(item => processItem(item, wlItems, ptwItems, cwItems));
                 }
 
-                // Sort A-Z
+                // Sort A-Z dan batasi 9 per section
                 const getTitle = i => (i.show || i.movie || i.anime || i)?.title || '';
-                cwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b)));
-                wlItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b)));
-                ptwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b)));
+                cwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
+                wlItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
+                ptwItems.sort((a, b) => getTitle(a).localeCompare(getTitle(b))).slice(0, 9);
 
                 renderGrid($('#continueWatchingGrid'), cwItems);
                 renderGrid($('#watchlistGrid'), wlItems);
@@ -376,9 +374,10 @@
             else if (status === 'plantowatch') ptw.push(item);
         }
 
+        // ===== RENDER GRID =====
         function renderGrid(grid, items) {
             grid.innerHTML = (items || []).map(item => {
-                const show = item.show || item.movie || item;
+                const show = item.show || item.movie || item.anime || item;
                 const title = show?.title || 'Unknown';
                 const overview = show?.overview || '';
                 const type = show?.type || item.type || 'show';
@@ -411,12 +410,11 @@
                         epType
                     };
 
-                    document.getElementById('modalTitle').textContent = selectedItem.title;
-                    document.getElementById('modalType').textContent = formatType(selectedItem.type);
-                    document.getElementById('modalOverview').textContent = selectedItem.overview || 'Tidak ada deskripsi.';
-                    document.getElementById('actionModal').classList.remove('hidden');
+                    $('#modalTitle').textContent = selectedItem.title;
+                    $('#modalType').textContent = formatType(selectedItem.type);
+                    $('#modalOverview').textContent = selectedItem.overview || 'Tidak ada deskripsi.';
+                    $('#actionModal').classList.remove('hidden');
 
-                    // Fetch detail jika ada simklId
                     if (simklId) {
                         await loadDetail(simklId, epType);
                     }
@@ -433,119 +431,76 @@
             const intent = APP_INTENTS[appKey];
             const url = intent.replace('{q}', encodeURIComponent(selectedItem.title));
             window.location.href = url;
-            document.getElementById('actionModal').classList.add('hidden');
+            $('#actionModal').classList.add('hidden');
         }
 
-        // Fungsi untuk ambil detail metadata dari SIMKL
+        // ===== LOAD DETAIL (endpoint publik) =====
         async function loadDetail(simklId, type) {
             const endpointMap = { show: 'tv', movie: 'movies', anime: 'anime' };
             const endpoint = endpointMap[type] || 'tv';
 
             try {
-                // Gunakan fetchSimkl (pakai auth token) untuk detail lengkap
                 const detail = await fetchSimkl(`/${endpoint}/${simklId}?extended=full`);
                 if (!detail || !detail.id) {
                     console.warn('Detail tidak ditemukan untuk', simklId);
                     return;
                 }
 
-                // Update modal dengan detail
-                const meta = document.getElementById('modalMetadata');
+                const meta = $('#modalMetadata');
                 if (!meta) {
                     console.error('modalMetadata element not found');
                     return;
                 }
-                    let html = '';
 
-                    // Title & Year
-                    html += `<p class="text-sm text-slate-300 font-medium">${detail.title || ''} (${detail.year || ''})</p>`;
+                let html = '';
 
-                    // Genres
-                    if (detail.genres && detail.genres.length > 0) {
-                        html += `<p class="text-xs text-slate-400 mt-1">${detail.genres.join(' • ')}</p>`;
-                    }
+                html += `<p class="text-sm text-slate-300 font-medium">${detail.title || ''} (${detail.year || ''})</p>`;
 
-                    // Ratings
-                    if (detail.ratings) {
-                        const simklRating = detail.ratings.simkl;
-                        const imdbRating = detail.ratings.imdb;
-                        let ratings = [];
-                        if (simklRating) ratings.push(`★ ${simklRating.rating}/10`);
-                        if (imdbRating) ratings.push(`IMDb ${imdbRating.rating}/10`);
-                        if (ratings.length > 0) {
-                            html += `<p class="text-xs text-slate-400 mt-1">${ratings.join(' • ')}</p>`;
-                        }
-                    }
-
-                    // Runtime
-                    if (detail.runtime) {
-                        html += `<p class="text-xs text-slate-500 mt-1">Duration: ${detail.runtime} min</p>`;
-                    }
-
-                    // Certification
-                    if (detail.certification) {
-                        html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.certification}</span>`;
-                    }
-
-                    // Network / Country
-                    if (detail.network) {
-                        html += `<p class="text-xs text-slate-500 mt-1">${detail.network}</p>`;
-                    }
-                    if (detail.country) {
-                        html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.country}</span>`;
-                    }
-
-                    // Status
-                    if (detail.status) {
-                        html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.status}</span>`;
-                    }
-
-                    // First/Last Aired (TV/Anime)
-                    if (detail.first_aired) {
-                        html += `<p class="text-xs text-slate-500 mt-1">First Aired: ${detail.first_aired}</p>`;
-                    }
-                    if (detail.last_aired) {
-                        html += `<p class="text-xs text-slate-500 mt-1">Last Aired: ${detail.last_aired}</p>`;
-                    }
-
-                    // Original Language
-                    if (detail.original_language) {
-                        html += `<p class="text-xs text-slate-500 mt-1">Language: ${detail.original_language.toUpperCase()}</p>`;
-                    }
-
-                    // Fansart
-                    if (detail.fanart) {
-                        html += `<img src="https://simkl.in/fanart/${detail.fanart}_m.jpg" alt="fanart" class="mt-3 w-full rounded-lg object-cover h-40" onerror="this.style.display='none'">`;
-                    }
-
-                    // Trailer
-                    if (detail.trailers && detail.trailers.length > 0) {
-                        const trailer = detail.trailers.find(t => t.type === 'trailer');
-                        if (trailer && trailer.youtube) {
-                            html += `<a href="https://www.youtube.com/watch?v=${trailer.youtube}" target="_blank" class="inline-block mt-3 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-500 transition">▶ Watch Trailer</a>`;
-                        }
-                    }
-
-                    meta.innerHTML = html || '<p class="text-slate-400 text-sm">No metadata available.</p>';
+                if (detail.genres && detail.genres.length > 0) {
+                    html += `<p class="text-xs text-slate-400 mt-1">${detail.genres.join(' • ')}</p>`;
                 }
 
-                // Update overview jika lebih lengkap
+                if (detail.ratings) {
+                    const ratings = [];
+                    if (detail.ratings.simkl) ratings.push(`★ ${detail.ratings.simkl.rating}/10`);
+                    if (detail.ratings.imdb) ratings.push(`IMDb ${detail.ratings.imdb.rating}/10`);
+                    if (ratings.length > 0) html += `<p class="text-xs text-slate-400 mt-1">${ratings.join(' • ')}</p>`;
+                }
+
+                if (detail.runtime) html += `<p class="text-xs text-slate-500 mt-1">Duration: ${detail.runtime} min</p>`;
+                if (detail.certification) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.certification}</span>`;
+                if (detail.network) html += `<p class="text-xs text-slate-500 mt-1">${detail.network}</p>`;
+                if (detail.country) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.country}</span>`;
+                if (detail.status) html += `<span class="px-1.5 py-0.5 text-xs bg-slate-800 text-slate-300 rounded mt-1 inline-block">${detail.status}</span>`;
+                if (detail.first_aired) html += `<p class="text-xs text-slate-500 mt-1">First Aired: ${detail.first_aired}</p>`;
+                if (detail.last_aired) html += `<p class="text-xs text-slate-500 mt-1">Last Aired: ${detail.last_aired}</p>`;
+                if (detail.original_language) html += `<p class="text-xs text-slate-500 mt-1">Language: ${detail.original_language.toUpperCase()}</p>`;
+
+                if (detail.fanart) {
+                    html += `<img src="https://simkl.in/fanart/${detail.fanart}_m.jpg" alt="fanart" class="mt-3 w-full rounded-lg object-cover h-40" onerror="this.style.display='none'">`;
+                }
+
+                if (detail.trailers && detail.trailers.length > 0) {
+                    const trailer = detail.trailers.find(t => t.type === 'trailer');
+                    if (trailer && trailer.youtube) {
+                        html += `<a href="https://www.youtube.com/watch?v=${trailer.youtube}" target="_blank" class="inline-block mt-3 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-500 transition">▶ Watch Trailer</a>`;
+                    }
+                }
+
+                meta.innerHTML = html || '<p class="text-slate-400 text-sm">No metadata available.</p>';
+
                 if (detail.overview) {
-                    document.getElementById('modalOverview').textContent = detail.overview;
+                    $('#modalOverview').textContent = detail.overview;
                 }
 
             } catch (e) {
                 console.error('Failed to load detail:', e);
-                const meta = document.getElementById('modalMetadata');
+                const meta = $('#modalMetadata');
                 if (meta) {
                     meta.innerHTML = `<p class="text-red-400 text-xs">Gagal memuat detail: ${e.message}</p>`;
                 }
             }
         }
-
-        // Helper
-        const $ = sel => document.querySelector(sel);
-        const $$ = sel => document.querySelectorAll(sel);
 
         // ===== EVENT LISTENERS =====
         $('#settingsBtn').addEventListener('click', () => $('#settingsModal').classList.remove('hidden'));
