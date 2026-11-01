@@ -1,10 +1,10 @@
 # Watchlist Hub
 
-PWA Dashboard untuk agregasi watchlist SIMKL dan pencarian langsung ke aplikasi streaming (Stremio, Nuvio, Cloudstream, Netflix, Prime Video, Disney+).
+PWA Dashboard untuk agregasi watchlist SIMKL dan pencarian langsung ke aplikasi streaming (Stremio, Nuvio, Cloudstream, Netflix).
 
 ## Fitur
 - **Integrasi SIMKL API**: Ambil data *Continue Watching* & *Watchlist* otomatis
-- **Intent Launcher**: Langsung cari judul di aplikasi pilihan di Android
+- **Intent Launcher**: Langsung cari/buka judul di aplikasi pilihan di Android (`com.stremio.one`, `app.nuvio.player`, `com.lagradost.cloudstream3`, Netflix)
 - **PWA Support**: Bisa di-install sebagai aplikasi mobile/desktop
 - **Mobile First**: Responsif untuk smartphone, tablet, dan Android TV browser
 
