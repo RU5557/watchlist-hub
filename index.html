@@ -352,7 +352,7 @@
                 // Helper untuk proses item dari /sync/all-items/{type}
                 const processItem = (item, type) => {
                     item.type = type; // tetapkan type agar renderGrid bisa pakai
-                    if (item.status === 'watching') wl.push(item);
+                    if (item.status === 'watching') wlItems.push(item);
                     else if (item.status === 'plantowatch') ptw.push(item);
                 };
 
